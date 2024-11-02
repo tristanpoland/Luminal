@@ -1,0 +1,8 @@
+[package]
+name = "bust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-std = "1.13.0"
+crossbeam-queue = "0.3.11"
