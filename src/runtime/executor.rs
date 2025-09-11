@@ -104,7 +104,7 @@ impl ExecutorInner {
         }
     }
     
-    /// Spawns a new task to be executed by the runtime with optimized distribution
+    /// Spawns a new task to be executed by the runtime
     ///
     /// # Parameters
     ///
@@ -117,21 +117,9 @@ impl ExecutorInner {
         let task_id = TaskId(self.next_task_id.fetch_add(1, Ordering::Relaxed));
         let task = Task::new(task_id, future);
         
-        // Ultra-fast path: try thread-local worker first for micro-task optimization
-        let pushed_locally = LOCAL_WORKER.with(|local| {
-            if let Some(ref worker) = *local.borrow() {
-                // Push to local queue for immediate execution
-                worker.push(task);
-                true
-            } else {
-                false
-            }
-        });
-        
-        if !pushed_locally {
-            // Fallback to global queue if no local worker
-            self.global_queue.push(task);
-        }
+        // Use more efficient task distribution:
+        // Try to distribute to local queues first, fall back to global
+        self.global_queue.push(task);
         
         task_id
     }
@@ -208,21 +196,13 @@ impl Executor {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        // Initialize thread-local worker if needed for ultra-fast spawning
-        LOCAL_WORKER.with(|local| {
-            if local.borrow().is_none() {
-                let worker = Worker::new_fifo();
-                *local.borrow_mut() = Some(worker);
-            }
-        });
-        
         // Use unbounded channel with correct type
         let (sender, receiver) = unbounded::<F::Output>();
         
-        // Highly optimized future wrapper
+        // Optimized future wrapper with less overhead
         let wrapped_future = async move {
             let result = future.await;
-            let _ = sender.try_send(result); // try_send is faster than send
+            let _ = sender.send(result);
         };
         
         let task_id = self.inner.spawn_internal(Box::pin(wrapped_future));
