@@ -69,16 +69,22 @@ impl WorkerThread {
                 found_work = self.steal_work();
             }
             
-            // Apply exponential backoff when no work is available
+            // Optimized backoff strategy for better performance
             if !found_work {
                 idle_count += 1;
-                if idle_count > 1000 {
-                    // Exponential backoff to reduce CPU usage
-                    let sleep_duration = std::cmp::min(idle_count - 1000, 1000);
-                    thread::sleep(Duration::from_micros(sleep_duration as u64));
-                } else {
+                if idle_count > 100 {
+                    // More aggressive sleeping to reduce CPU overhead
+                    if idle_count > 10000 {
+                        thread::sleep(Duration::from_micros(1000));
+                    } else if idle_count > 1000 {
+                        thread::sleep(Duration::from_micros(10));
+                    } else {
+                        thread::yield_now();
+                    }
+                } else if idle_count > 10 {
                     thread::yield_now();
                 }
+                // Busy wait for first 10 iterations for better latency
             }
         }
     }
@@ -113,56 +119,54 @@ impl WorkerThread {
     
     /// Attempts to steal work from other workers or the global queue
     ///
-    /// This implements the work-stealing algorithm that allows
-    /// idle workers to take tasks from busy workers, improving
-    /// overall throughput and load balancing.
+    /// This implements an optimized work-stealing algorithm that reduces
+    /// contention and improves cache locality for better performance.
     ///
     /// # Returns
     ///
     /// `true` if work was successfully stolen, `false` otherwise
     pub fn steal_work(&self) -> bool {
-        // Try to steal from global queue first (batch steal for efficiency)
-        for _ in 0..16 {
-            match self.global_queue.steal() {
-                crossbeam_deque::Steal::Success(task) => {
-                    // Only push to worker queue if there's room (to prevent overflow)
-                    if self.worker.len() < 100 {
-                        self.worker.push(task);
-                    } else {
-                        // Push back to global queue if worker queue is too full
-                        self.global_queue.push(task);
+        // Try global queue first with optimized batch stealing
+        match self.global_queue.steal_batch_and_pop(&self.worker) {
+            crossbeam_deque::Steal::Success(task) => {
+                // Execute the task immediately for better cache locality
+                let mut task = task;
+                self.run_task(&mut task);
+                return true;
+            }
+            crossbeam_deque::Steal::Empty => {}
+            crossbeam_deque::Steal::Retry => {
+                // Quick retry on contention
+                match self.global_queue.steal() {
+                    crossbeam_deque::Steal::Success(mut task) => {
+                        self.run_task(&mut task);
+                        return true;
                     }
-                    return true;
+                    _ => {}
                 }
-                crossbeam_deque::Steal::Empty => break,
-                crossbeam_deque::Steal::Retry => continue,
             }
         }
         
-        // Try to steal from other workers with backoff on failures
-        let mut retry_count = 0;
-        for stealer in &self.stealers {
-            // Skip self (compare by raw pointer address)
-            if stealer as *const _ != &self.worker.stealer() as *const _ {
-                match stealer.steal() {
-                    crossbeam_deque::Steal::Success(task) => {
-                        // Only push to worker queue if there's room
-                        if self.worker.len() < 100 {
-                            self.worker.push(task);
-                        } else {
-                            // Push back to global queue if worker queue is too full
-                            self.global_queue.push(task);
-                        }
+        // Optimized worker stealing with round-robin approach
+        let start_idx = self.id % self.stealers.len();
+        for i in 0..self.stealers.len() {
+            let idx = (start_idx + i) % self.stealers.len();
+            if idx == self.id { continue; } // Skip self
+            
+            let stealer = &self.stealers[idx];
+            match stealer.steal_batch_and_pop(&self.worker) {
+                crossbeam_deque::Steal::Success(task) => {
+                    // Execute immediately for better performance
+                    let mut task = task;
+                    self.run_task(&mut task);
+                    return true;
+                }
+                crossbeam_deque::Steal::Empty => continue,
+                crossbeam_deque::Steal::Retry => {
+                    // Single retry on contention
+                    if let crossbeam_deque::Steal::Success(mut task) = stealer.steal() {
+                        self.run_task(&mut task);
                         return true;
-                    }
-                    crossbeam_deque::Steal::Empty => continue,
-                    crossbeam_deque::Steal::Retry => {
-                        retry_count += 1;
-                        if retry_count > 10 {
-                            thread::yield_now();
-                            retry_count = 0;
-                        }
-                        continue;
                     }
                 }
             }

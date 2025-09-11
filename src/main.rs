@@ -29,12 +29,11 @@ use std::sync::Arc;
 /// The computed sum of squares
 async fn cpu_intensive_task(iterations: usize) -> usize {
     let mut sum = 0;
-    // Yield more frequently (every 100 iterations instead of 1000)
-    // This prevents worker threads from being blocked too long
+    // Optimized yielding strategy for better performance
     for i in 0..iterations {
         sum += i * i;
-        if i % 100 == 0 {
-            // Yield to allow other tasks to run and prevent worker starvation
+        if i % 1000 == 0 {
+            // Less frequent yielding for better CPU cache utilization
             std::future::ready(()).await;
         }
     }

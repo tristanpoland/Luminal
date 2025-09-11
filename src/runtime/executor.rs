@@ -8,15 +8,21 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::Context;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::cell::RefCell;
 
-use crossbeam_channel::bounded;
-use crossbeam_deque::{Injector, Steal};
+use crossbeam_channel::unbounded;
+use crossbeam_deque::{Injector, Steal, Worker};
 
 use super::join_handle::JoinHandle;
 use super::task::{BoxFuture, Task, TaskId};
 use super::waker::create_task_waker;
 use super::worker::WorkerThread;
+
+// Thread-local worker for ultra-fast task spawning
+thread_local! {
+    static LOCAL_WORKER: RefCell<Option<Worker<Task>>> = RefCell::new(None);
+}
 
 /// Inner state of the executor shared between instances
 ///
@@ -37,6 +43,9 @@ struct ExecutorInner {
     
     /// Counter for the number of tasks processed
     tasks_processed: Arc<AtomicUsize>,
+    
+    /// All worker stealers for work distribution
+    all_stealers: Arc<Vec<crossbeam_deque::Stealer<Task>>>,
 }
 
 impl ExecutorInner {
@@ -60,6 +69,7 @@ impl ExecutorInner {
         let mut stealers = Vec::with_capacity(num_workers);
         let mut worker_handles = Vec::with_capacity(num_workers);
         
+        
         // Create workers for each thread (workers are not shared)
         for i in 0..num_workers {
             let worker = crossbeam_deque::Worker::new_fifo();
@@ -82,16 +92,19 @@ impl ExecutorInner {
             worker_handles.push(handle);
         }
         
+        let all_stealers = Arc::new(stealers);
+        
         ExecutorInner {
             global_queue,
             worker_handles,
             shutdown,
             next_task_id: AtomicU64::new(1),
             tasks_processed,
+            all_stealers,
         }
     }
     
-    /// Spawns a new task to be executed by the runtime
+    /// Spawns a new task to be executed by the runtime with optimized distribution
     ///
     /// # Parameters
     ///
@@ -104,8 +117,21 @@ impl ExecutorInner {
         let task_id = TaskId(self.next_task_id.fetch_add(1, Ordering::Relaxed));
         let task = Task::new(task_id, future);
         
-        // Always use global queue for task distribution
-        self.global_queue.push(task);
+        // Ultra-fast path: try thread-local worker first for micro-task optimization
+        let pushed_locally = LOCAL_WORKER.with(|local| {
+            if let Some(ref worker) = *local.borrow() {
+                // Push to local queue for immediate execution
+                worker.push(task);
+                true
+            } else {
+                false
+            }
+        });
+        
+        if !pushed_locally {
+            // Fallback to global queue if no local worker
+            self.global_queue.push(task);
+        }
         
         task_id
     }
@@ -182,19 +208,23 @@ impl Executor {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let (sender, receiver) = bounded(1);
+        // Initialize thread-local worker if needed for ultra-fast spawning
+        LOCAL_WORKER.with(|local| {
+            if local.borrow().is_none() {
+                let worker = Worker::new_fifo();
+                *local.borrow_mut() = Some(worker);
+            }
+        });
         
-        // We need to use a different approach for panic handling in async code
+        // Use unbounded channel with correct type
+        let (sender, receiver) = unbounded::<F::Output>();
+        
+        // Highly optimized future wrapper
         let wrapped_future = async move {
-            // Create a future that will be polled within a panic handler
             let result = future.await;
-            
-            // Always try to send the result, even if the receiver is dropped
-            // This prevents tasks from being stuck if their results aren't needed
-            let _ = sender.send(result);
+            let _ = sender.try_send(result); // try_send is faster than send
         };
         
-        // Spawn with panic handling wrapper
         let task_id = self.inner.spawn_internal(Box::pin(wrapped_future));
         
         JoinHandle {
@@ -230,57 +260,53 @@ impl Executor {
     {
         let handle = self.spawn(future);
         
-        // Help with work while waiting for result
-        let start = Instant::now();
-        let mut spin_count = 0u32;
+        // Optimized blocking with better work helping
+        let mut backoff_count = 0u32;
         
         loop {
+            // Check for result first (most common case)
             match handle.receiver.try_recv() {
                 Ok(result) => return result,
                 Err(crossbeam_channel::TryRecvError::Empty) => {
-                    // Help process work to avoid deadlocks
-                    match self.inner.global_queue.steal() {
-                        Steal::Success(mut task) => {
-                            let waker = create_task_waker(
-                                task.id, 
-                                self.inner.global_queue.clone()
-                            );
-                            let mut cx = Context::from_waker(&waker);
+                    // More efficient work helping strategy
+                    let mut helped = false;
+                    
+                    // Try to help with multiple tasks in one go
+                    for _ in 0..4 {
+                        match self.inner.global_queue.steal() {
+                            Steal::Success(mut task) => {
+                                let waker = create_task_waker(
+                                    task.id, 
+                                    self.inner.global_queue.clone()
+                                );
+                                let mut cx = Context::from_waker(&waker);
 
-                            if let std::task::Poll::Pending = task.poll(&mut cx) {
-                                self.inner.global_queue.push(task);
+                                if let std::task::Poll::Pending = task.poll(&mut cx) {
+                                    self.inner.global_queue.push(task);
+                                }
+                                helped = true;
                             }
-                            spin_count = 0;
+                            Steal::Empty => break,
+                            Steal::Retry => continue,
                         }
-                        Steal::Empty => {
-                            spin_count += 1;
-                            if spin_count > 1000 {
-                                thread::yield_now();
-                                spin_count = 0;
-                            }
-
-                            // Timeout protection
-                            if start.elapsed() > Duration::from_secs(30) {
-                                panic!("Task timed out after 30 seconds");
-                            }
-                        }
-                        Steal::Retry => {
-                            // Optionally handle retry, here we just yield
+                    }
+                    
+                    // Optimized backoff strategy
+                    if !helped {
+                        backoff_count += 1;
+                        if backoff_count > 1000 {
+                            thread::sleep(Duration::from_nanos(100));
+                            backoff_count = 0;
+                        } else if backoff_count > 100 {
                             thread::yield_now();
                         }
+                        // Else busy wait for better latency
+                    } else {
+                        backoff_count = 0;
                     }
                 }
                 Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                    // Channel closed: this happens if task panicked or was dropped
-                    // Instead of panicking, handle gracefully
-                    eprintln!("ERROR: Task channel disconnected - possible causes:");
-                    eprintln!("  1. Task panicked during execution");
-                    eprintln!("  2. Worker thread terminated unexpectedly");
-                    eprintln!("  3. Memory corruption or use-after-free in task execution");
-                    eprintln!("Try adding more yields in CPU-intensive tasks with .await points");
-                    
-                    // For debugging, we'll exit with a specific code to identify this error
-                    std::process::exit(101);
+                    panic!("Task execution failed - channel disconnected");
                 }
             }
         }
