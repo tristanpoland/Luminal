@@ -1,40 +1,163 @@
-# ~~BORE~~ BUST
+# BUST - Burst Oriented Response Enhancer
 
-the ~~Burst Oriented Response Enhancer~~ ~~Burst Utilization Scheduler Tool~~ Best aUtomatic Scheduling for Threads scheduler for rustc and rust projects
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## is it better?
+BUST is a high-performance async runtime designed to solve tokio's DLL boundary issues while maintaining similar performance and API compatibility.
 
-nah its 1 ms slower than sync rust i tested ![m](./image.png)
+![Performance Comparison](./image.png)
 
-## is it bug-free?
+## Key Features
 
-depends on what you define a 'bug'
+- **DLL Boundary Safe**: Unlike tokio, BUST doesn't rely on thread-local storage, making it 100% safe to pass across DLL boundaries
+- **Explicit Handle Passing**: All runtime context is explicit rather than implicit via TLS
+- **Drop-in Replacement**: Provides tokio-compatible APIs like `spawn`, `block_on`, and `JoinHandle`
+- **Cross-Platform**: Works on Windows, Linux, and macOS
+- **Multi-threaded**: Uses a work-stealing scheduler with multiple worker threads for optimal CPU utilization
+- **Efficient Work Stealing**: Implements a sophisticated work-stealing algorithm to distribute tasks evenly across worker threads
+- **Memory Efficient**: Minimizes allocations and memory overhead in the task scheduling system
 
-## does it work?
+## Installation
 
-/shrug
+Add BUST to your `Cargo.toml`:
 
-## should i use this?
+```toml
+[dependencies]
+bust = "0.1.0"
+```
 
-yes
+## Basic Usage
 
-## why is it so bloated?
+```rust
+use bust::Runtime;
 
-yes
+async fn hello_world() {
+    println!("Hello, world!");
+}
 
-## did you make this?
+fn main() {
+    let rt = Runtime::new().unwrap();
+    let rt_clone = rt.clone();
+    rt.block_on(async move {
+        rt_clone.spawn(hello_world()).await;
+    });
+}
+```
 
-yes
+## Explicit Runtime Usage
 
-## are you proud of this?
+```rust
+use bust::Runtime;
 
-yes
+fn main() {
+    let rt = Runtime::new().unwrap();
+    rt.block_on(async {
+        println!("Running on BUST runtime!");
+    });
+}
+```
 
-## should i go to north korea?
+## DLL Boundary Safety
 
-no
+Unlike tokio, which uses thread-local storage for its runtime context, BUST uses explicit context passing. This makes it safe to use across DLL boundaries:
 
-## is it multithreaded?
+```rust
+// Inside a DLL
+fn dll_function(runtime: bust::Runtime) -> u32 {
+    // Safe to use the runtime passed from outside
+    runtime.block_on(async { 42 })
+}
 
-no
+// From the main application
+fn main() {
+    let rt = bust::Runtime::new().unwrap();
+    let result = dll_function(rt.clone());
+    assert_eq!(result, 42);
+}
+```
 
+## API Reference
+
+### Runtime
+
+The central coordination point for the BUST async runtime:
+
+```rust
+// Create a new runtime
+let rt = Runtime::new().unwrap();
+
+// Spawn a task and get a JoinHandle
+let handle = rt.spawn(async { 42 });
+
+// Block and wait for a future to complete
+let result = rt.block_on(handle);
+
+// Get a handle to the runtime
+let handle = rt.handle();
+
+// Check runtime stats (queue length and processed tasks)
+let (queue_len, tasks_processed) = rt.stats();
+```
+
+### Handle
+
+A lightweight handle to a Runtime:
+
+```rust
+// Get a handle from an existing runtime
+let handle = rt.handle();
+
+// Spawn tasks using the handle
+let task = handle.spawn(async { 42 });
+
+// Block on futures using the handle
+let result = handle.block_on(task);
+```
+
+### Global Functions
+
+For convenience, BUST also provides global functions (though these use thread-local storage):
+
+```rust
+use bust::{spawn, block_on};
+
+// Spawn a task on the current thread's runtime
+let handle = spawn(async { 42 });
+
+// Block on a future using the current thread's runtime
+let result = block_on(handle);
+```
+
+## Benchmarks
+
+BUST includes comprehensive benchmark suites for:
+
+1. High throughput task processing
+2. CPU-intensive workloads
+3. Mixed workload scenarios
+4. Memory pressure testing
+5. Multi-runtime concurrency
+
+Run benchmarks with:
+
+```bash
+cargo run --release
+```
+
+## Testing
+
+Run the test suite with:
+
+```bash
+cargo test
+```
+
+## Why BUST?
+
+- **No TLS Dependencies**: Unlike tokio, BUST doesn't rely on thread-local storage, making it safe for DLL boundaries
+- **Explicit Context**: All runtime context is passed explicitly, making it easier to reason about and debug
+- **High Performance**: Designed with performance in mind, with minimal overhead compared to tokio
+- **API Compatibility**: Familiar API for tokio users, making migration easier
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
