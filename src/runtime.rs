@@ -1,3 +1,10 @@
+/// Runtime module implementing the core BUST async runtime functionality
+///
+/// This module provides the implementation of the BUST async runtime,
+/// including task scheduling, work-stealing algorithm, and runtime management.
+/// It offers a tokio-compatible API while avoiding thread-local storage
+/// to ensure safety across DLL boundaries.
+
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, AtomicUsize, AtomicBool, Ordering};
@@ -7,10 +14,17 @@ use std::time::{Duration, Instant};
 use std::thread;
 use std::fmt;
 
+/// Errors that can occur when working with tasks in the runtime
+///
+/// These represent the various failure modes that can occur when 
+/// scheduling, executing, or awaiting tasks.
 #[derive(Debug)]
 pub enum TaskError {
+    /// The channel used to communicate with a task has been disconnected
     Disconnected,
+    /// A timeout occurred while waiting for a task to complete
     Timeout,
+    /// The task panicked during execution
     Panicked,
 }
 
@@ -30,35 +44,63 @@ use crossbeam_deque::{Injector, Stealer, Worker};
 use crossbeam_channel::{bounded, Receiver, TryRecvError};
 
 
+/// A unique identifier for tasks within the runtime
+///
+/// Each task is assigned a unique ID when it's created, which is used
+/// for tracking and managing the task throughout its lifetime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TaskId(u64);
 
 impl TaskId {
+    /// Creates a new unique task ID
+    ///
+    /// Uses an atomic counter to ensure uniqueness across threads
+    #[allow(dead_code)]
     fn new() -> Self {
         static NEXT_ID: AtomicU64 = AtomicU64::new(1);
         TaskId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
     }
 }
 
+/// Type alias for a boxed future that can be sent across threads
 type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
+/// Represents an async task that can be scheduled and executed by the runtime
+///
+/// Contains the task's unique identifier and its underlying future.
 pub struct Task {
+    /// The unique identifier for this task
+    #[allow(dead_code)]
     id: TaskId,
+    
+    /// The actual future that will be executed
     future: BoxFuture,
 }
 
 impl Task {
+    /// Creates a new task with the given ID and future
     fn new(id: TaskId, future: BoxFuture) -> Self {
         Self { id, future }
     }
     
+    /// Polls the task's future, advancing its execution
+    ///
+    /// Returns Poll::Ready(()) when the future completes,
+    /// or Poll::Pending if it's not ready yet.
     fn poll(&mut self, cx: &mut Context<'_>) -> Poll<()> {
         self.future.as_mut().poll(cx)
     }
 }
 
+/// Handle for awaiting the completion of an asynchronous task
+///
+/// Similar to tokio's JoinHandle, this allows waiting for a task to complete
+/// and retrieving its result.
 pub struct JoinHandle<T> {
+    /// The unique identifier of the task
     id: TaskId,
+    
+    /// Channel for receiving the task's result when it completes
     receiver: Receiver<T>,
 }
 
@@ -431,17 +473,76 @@ impl Executor {
 }
 
 #[derive(Clone)]
+/// Main runtime for executing async tasks
+///
+/// The Runtime is the central coordination point for the BUST async runtime.
+/// It provides methods for spawning tasks, blocking on futures, and managing
+/// the runtime itself. Unlike tokio, this runtime is safe to pass across
+/// DLL boundaries as it doesn't rely on thread-local storage.
 pub struct Runtime {
+    /// The underlying executor that schedules and runs tasks
     executor: Arc<Executor>,
 }
 
 impl Runtime {
+    /// Creates a new BUST runtime
+    ///
+    /// This initializes a new multi-threaded runtime with a work-stealing scheduler
+    /// using the number of available CPU cores. The runtime will create worker
+    /// threads and begin processing the task queue immediately.
+    ///
+    /// # Returns
+    /// 
+    /// A new Runtime instance wrapped in a Result
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the runtime could not be initialized
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use bust::Runtime;
+    ///
+    /// let rt = Runtime::new().unwrap();
+    /// rt.block_on(async {
+    ///     println!("Running on BUST runtime!");
+    /// });
+    /// ```
     pub fn new() -> Result<Self, crate::error::RuntimeError> {
         Ok(Runtime {
             executor: Arc::new(Executor::new()),
         })
     }
 
+    /// Spawns a future onto the runtime
+    ///
+    /// This method takes a future and begins executing it on the runtime,
+    /// returning a JoinHandle that can be used to await its completion and
+    /// retrieve its result.
+    ///
+    /// # Parameters
+    ///
+    /// * `future` - The future to execute
+    ///
+    /// # Returns
+    ///
+    /// A JoinHandle that can be used to await the future's completion
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use bust::Runtime;
+    ///
+    /// let rt = Runtime::new().unwrap();
+    /// let handle = rt.spawn(async {
+    ///     // Some async work
+    ///     42
+    /// });
+    ///
+    /// let result = rt.block_on(handle); // Waits for the result
+    /// assert_eq!(result, 42);
+    /// ```
     pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
@@ -450,6 +551,31 @@ impl Runtime {
         self.executor.spawn(future)
     }
 
+    /// Blocks the current thread until the provided future completes
+    ///
+    /// This method takes a future and blocks the current thread until it completes,
+    /// helping process other tasks while waiting to avoid deadlocks.
+    ///
+    /// # Parameters
+    ///
+    /// * `future` - The future to execute and wait for
+    ///
+    /// # Returns
+    ///
+    /// The output of the future
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use bust::Runtime;
+    ///
+    /// let rt = Runtime::new().unwrap();
+    /// let result = rt.block_on(async {
+    ///     // Some async work
+    ///     42
+    /// });
+    /// assert_eq!(result, 42);
+    /// ```
     pub fn block_on<F>(&self, future: F) -> F::Output
     where
         F: Future + Send + 'static,
@@ -458,24 +584,87 @@ impl Runtime {
         self.executor.block_on(future)
     }
 
+    /// Returns a Handle to this runtime
+    ///
+    /// The Handle provides a lightweight way to interact with the runtime
+    /// without cloning the entire Runtime.
+    ///
+    /// # Returns
+    ///
+    /// A new Handle to this runtime
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use bust::Runtime;
+    ///
+    /// let rt = Runtime::new().unwrap();
+    /// let handle = rt.handle();
+    ///
+    /// // Use the handle to spawn tasks
+    /// let task = handle.spawn(async { 42 });
+    /// ```
     pub fn handle(&self) -> Handle {
         Handle::new(self.executor.clone())
     }
     
+    /// Returns statistics about the runtime
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing the current queue length and the number of tasks processed
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use bust::Runtime;
+    ///
+    /// let rt = Runtime::new().unwrap();
+    /// let (queue_len, tasks_processed) = rt.stats();
+    /// println!("Queue length: {}, Tasks processed: {}", queue_len, tasks_processed);
+    /// ```
     pub fn stats(&self) -> (usize, usize) {
         self.executor.stats()
     }
 }
 
+/// A lightweight handle to a Runtime
+///
+/// Handle provides a way to interact with the runtime
+/// without having to clone the entire Runtime structure.
+/// It allows spawning tasks and blocking on futures.
 pub struct Handle {
+    /// The executor that this handle refers to
     executor: Arc<Executor>,
 }
 
 impl Handle {
+    /// Creates a new handle to the provided executor
+    ///
+    /// # Parameters
+    ///
+    /// * `executor` - The executor this handle will use
+    ///
+    /// # Returns
+    ///
+    /// A new Handle instance
     fn new(executor: Arc<Executor>) -> Self {
         Handle { executor }
     }
 
+    /// Spawns a future onto the runtime
+    ///
+    /// This method takes a future and begins executing it on the runtime,
+    /// returning a JoinHandle that can be used to await its completion and
+    /// retrieve its result.
+    ///
+    /// # Parameters
+    ///
+    /// * `future` - The future to execute
+    ///
+    /// # Returns
+    ///
+    /// A JoinHandle that can be used to await the future's completion
     pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
@@ -484,6 +673,18 @@ impl Handle {
         self.executor.spawn(future)
     }
 
+    /// Blocks the current thread until the provided future completes
+    ///
+    /// This method takes a future and blocks the current thread until it completes,
+    /// helping process other tasks while waiting to avoid deadlocks.
+    ///
+    /// # Parameters
+    ///
+    /// * `future` - The future to execute and wait for
+    ///
+    /// # Returns
+    ///
+    /// The output of the future
     pub fn block_on<F>(&self, future: F) -> F::Output
     where
         F: Future + Send + 'static,
@@ -495,9 +696,37 @@ impl Handle {
 
 // Thread-local runtime for global functions
 thread_local! {
+    /// Thread-local runtime for global convenience functions
+    ///
+    /// While BUST generally avoids thread-local storage for its core functionality
+    /// to ensure DLL boundary safety, these convenience functions use a thread-local
+    /// runtime for ease of use when DLL boundary safety isn't a concern.
     static THREAD_RUNTIME: Runtime = Runtime::new().unwrap();
 }
 
+/// Spawns a future onto the current thread's runtime
+///
+/// This is a convenience function that uses a thread-local runtime.
+/// For DLL boundary safety, create and use an explicit Runtime instead.
+///
+/// # Parameters
+///
+/// * `future` - The future to execute
+///
+/// # Returns
+///
+/// A JoinHandle that can be used to await the future's completion
+///
+/// # Example
+///
+/// ```
+/// use bust::spawn;
+///
+/// let handle = spawn(async {
+///     // Some async work
+///     42
+/// });
+/// ```
 pub fn spawn<F>(future: F) -> JoinHandle<F::Output>
 where
     F: Future + Send + 'static,
@@ -506,6 +735,30 @@ where
     THREAD_RUNTIME.with(|rt| rt.spawn(future))
 }
 
+/// Blocks the current thread until the provided future completes
+///
+/// This is a convenience function that uses a thread-local runtime.
+/// For DLL boundary safety, create and use an explicit Runtime instead.
+///
+/// # Parameters
+///
+/// * `future` - The future to execute and wait for
+///
+/// # Returns
+///
+/// The output of the future
+///
+/// # Example
+///
+/// ```
+/// use bust::block_on;
+///
+/// let result = block_on(async {
+///     // Some async work
+///     42
+/// });
+/// assert_eq!(result, 42);
+/// ```
 pub fn block_on<F>(future: F) -> F::Output
 where
     F: Future + Send + 'static,

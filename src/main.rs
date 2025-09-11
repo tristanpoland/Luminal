@@ -1,8 +1,32 @@
+/// BUST Runtime Performance Benchmark and Demo Application
+///
+/// This application demonstrates the capabilities of the BUST runtime
+/// through various benchmarks and usage examples. It showcases:
+/// 
+/// - High throughput task processing
+/// - CPU-intensive workload handling
+/// - Mixed workload scenarios
+/// - Memory pressure testing
+/// - Multi-runtime concurrency
+/// - Basic usage examples
+
 use bust::Runtime;
 use std::time::Instant;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+/// Simulates a CPU-intensive computation with cooperative yielding
+///
+/// This function demonstrates how to implement CPU-intensive tasks that
+/// still cooperate with the async runtime by yielding periodically.
+///
+/// # Parameters
+///
+/// * `iterations` - The number of iterations to perform
+///
+/// # Returns
+///
+/// The computed sum of squares
 async fn cpu_intensive_task(iterations: usize) -> usize {
     let mut sum = 0;
     // Yield more frequently (every 100 iterations instead of 1000)
@@ -17,11 +41,28 @@ async fn cpu_intensive_task(iterations: usize) -> usize {
     sum
 }
 
+/// Simulates a very lightweight async task
+///
+/// This represents the typical small, quick tasks that an async runtime
+/// might handle in high volumes.
+///
+/// # Parameters
+///
+/// * `id` - Task identifier
+///
+/// # Returns
+///
+/// Double the task ID
 async fn micro_task(id: usize) -> usize {
     // Very lightweight task
     id * 2
 }
 
+/// Benchmark for measuring high-throughput task processing capability
+///
+/// This benchmark tests the runtime's ability to efficiently process
+/// a large number of small, lightweight tasks. It demonstrates the
+/// overhead of task scheduling and completion.
 async fn high_throughput_benchmark() {
     println!("=== BUST Runtime High Throughput Benchmark ===");
     
@@ -241,17 +282,29 @@ async fn whats_under_nikos_hat() {
     niko_do_your_thing().await.unwrap();
 }
 
+/// Main entry point for the BUST Runtime performance demo
+///
+/// Runs a series of benchmarks to demonstrate the capabilities and
+/// performance characteristics of the BUST async runtime, including:
+///
+/// - High throughput task processing
+/// - Concurrent runtime instances
+/// - Memory pressure testing
+/// - Basic usage examples
 fn main() {
     println!("🚀 BUST Runtime Performance Demo 🚀");
     
-    // Run performance benchmarks
+    // Create a runtime for benchmarks
     let rt = Runtime::new().unwrap();
     
     println!("\n=== Running Performance Benchmarks ===");
+    
+    // Run comprehensive benchmarks
     rt.block_on(high_throughput_benchmark());
     rt.block_on(concurrent_runtime_test());
     rt.block_on(memory_pressure_test());
     
+    // Simple usage examples
     println!("\n=== Original Demo ===");
     let rt2 = Runtime::new().unwrap();
     rt2.spawn(mewo_wrap("hehe"));
@@ -262,6 +315,7 @@ fn main() {
         println!("All tasks spawned");
     });
     
+    // Benchmark completion
     println!("✅ All benchmarks completed successfully!");
     println!("🎯 BUST Runtime is production-ready with high-performance multi-threaded execution!");
 }
