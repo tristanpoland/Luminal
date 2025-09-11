@@ -606,7 +606,12 @@ async fn run_comparison_benchmarks() {
     
     // Run Tokio benchmarks
     println!("\n--- RUNNING TOKIO BENCHMARKS ---");
-    let tokio_rt = tokio::runtime::Runtime::new().unwrap();
+    let num_workers = 4; // or use num_cpus::get()
+    let rt = Runtime::new().unwrap();
+    let tokio_rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(num_workers)
+        .build()
+        .unwrap();
     
     let tokio_results = tokio_rt.block_on(async {
         // Micro task benchmark
