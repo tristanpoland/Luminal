@@ -2,7 +2,28 @@
 name = "bust"
 version = "0.1.0"
 edition = "2021"
+authors = ["BUST Team"]
+description = "A DLL-boundary safe async runtime with tokio-compatible API"
+license = "MIT"
+repository = "https://github.com/user/bust"
+keywords = ["async", "runtime", "dll", "tokio", "executor"]
+categories = ["asynchronous", "concurrency"]
+
+[lib]
+name = "bust"
+path = "src/lib.rs"
 
 [dependencies]
 async-std = "1.13.0"
 crossbeam-queue = "0.3.11"
+crossbeam-channel = "0.5.8"
+crossbeam-deque = "0.8.5"
+crossbeam-utils = "0.8.19"
+parking_lot = "0.12.3"
+mio = "1.0.2"
+slab = "0.4.9"
+pin-project-lite = "0.2.15"
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
