@@ -1,7 +1,7 @@
-//! Error types for the BUST runtime
+//! Error types for the Luminal runtime
 //!
 //! This module defines the error types that can occur during
-//! task execution and management within the BUST runtime.
+//! task execution and management within the Luminal runtime.
 
 use std::fmt;
 

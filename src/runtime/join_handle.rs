@@ -23,7 +23,7 @@ use super::task::TaskId;
 /// # Examples
 ///
 /// ```
-/// use bust::Runtime;
+/// use luminal::Runtime;
 ///
 /// let rt = Runtime::new().unwrap();
 /// let handle = rt.spawn(async { 42 });

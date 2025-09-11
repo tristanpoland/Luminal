@@ -1,14 +1,14 @@
-# BUST - Burst Oriented Response Enhancer
+# Luminal
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-BUST is a high-performance async runtime designed to solve tokio's DLL boundary issues while maintaining similar performance and API compatibility.
+Luminal is a high-performance async runtime designed to solve tokio's DLL boundary issues while maintaining similar performance and API compatibility.
 
 ![Performance Comparison](./image.png)
 
 ## Key Features
 
-- **DLL Boundary Safe**: Unlike tokio, BUST doesn't rely on thread-local storage, making it 100% safe to pass across DLL boundaries
+- **DLL Boundary Safe**: Unlike tokio, Luminal doesn't rely on thread-local storage, making it 100% safe to pass across DLL boundaries
 - **Explicit Handle Passing**: All runtime context is explicit rather than implicit via TLS
 - **Drop-in Replacement**: Provides tokio-compatible APIs like `spawn`, `block_on`, and `JoinHandle`
 - **Cross-Platform**: Works on Windows, Linux, and macOS
@@ -18,17 +18,17 @@ BUST is a high-performance async runtime designed to solve tokio's DLL boundary 
 
 ## Installation
 
-Add BUST to your `Cargo.toml`:
+Add Luminal to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-bust = "0.1.0"
+luminal = "0.1.0"
 ```
 
 ## Basic Usage
 
 ```rust
-use bust::Runtime;
+use luminal::Runtime;
 
 async fn hello_world() {
     println!("Hello, world!");
@@ -46,30 +46,30 @@ fn main() {
 ## Explicit Runtime Usage
 
 ```rust
-use bust::Runtime;
+use luminal::Runtime;
 
 fn main() {
     let rt = Runtime::new().unwrap();
     rt.block_on(async {
-        println!("Running on BUST runtime!");
+        println!("Running on Luminal runtime!");
     });
 }
 ```
 
 ## DLL Boundary Safety
 
-Unlike tokio, which uses thread-local storage for its runtime context, BUST uses explicit context passing. This makes it safe to use across DLL boundaries:
+Unlike tokio, which uses thread-local storage for its runtime context, Luminal uses explicit context passing. This makes it safe to use across DLL boundaries:
 
 ```rust
 // Inside a DLL
-fn dll_function(runtime: bust::Runtime) -> u32 {
+fn dll_function(runtime: luminal::Runtime) -> u32 {
     // Safe to use the runtime passed from outside
     runtime.block_on(async { 42 })
 }
 
 // From the main application
 fn main() {
-    let rt = bust::Runtime::new().unwrap();
+    let rt = luminal::Runtime::new().unwrap();
     let result = dll_function(rt.clone());
     assert_eq!(result, 42);
 }
@@ -79,7 +79,7 @@ fn main() {
 
 ### Runtime
 
-The central coordination point for the BUST async runtime:
+The central coordination point for the Luminal async runtime:
 
 ```rust
 // Create a new runtime
@@ -115,10 +115,10 @@ let result = handle.block_on(task);
 
 ### Global Functions
 
-For convenience, BUST also provides global functions (though these use thread-local storage):
+For convenience, Luminal also provides global functions (though these use thread-local storage):
 
 ```rust
-use bust::{spawn, block_on};
+use luminal::{spawn, block_on};
 
 // Spawn a task on the current thread's runtime
 let handle = spawn(async { 42 });
@@ -129,7 +129,7 @@ let result = block_on(handle);
 
 ## Benchmarks
 
-BUST includes comprehensive benchmark suites for:
+Luminal includes comprehensive benchmark suites for:
 
 1. High throughput task processing
 2. CPU-intensive workloads
@@ -151,9 +151,9 @@ Run the test suite with:
 cargo test
 ```
 
-## Why BUST?
+## Why Luminal?
 
-- **No TLS Dependencies**: Unlike tokio, BUST doesn't rely on thread-local storage, making it safe for DLL boundaries
+- **No TLS Dependencies**: Unlike tokio, Luminal doesn't rely on thread-local storage, making it safe for DLL boundaries
 - **Explicit Context**: All runtime context is passed explicitly, making it easier to reason about and debug
 - **High Performance**: Designed with performance in mind, with minimal overhead compared to tokio
 - **API Compatibility**: Familiar API for tokio users, making migration easier

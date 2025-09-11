@@ -54,7 +54,7 @@ impl Handle {
     /// # Examples
     ///
     /// ```
-    /// use bust::Runtime;
+    /// use luminal::Runtime;
     ///
     /// let rt = Runtime::new().unwrap();
     /// let handle = rt.handle();
@@ -95,7 +95,7 @@ impl Handle {
     /// # Examples
     ///
     /// ```
-    /// use bust::Runtime;
+    /// use luminal::Runtime;
     ///
     /// let rt = Runtime::new().unwrap();
     /// let handle = rt.handle();

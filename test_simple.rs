@@ -1,4 +1,4 @@
-use bust::Runtime;
+use luminal::Runtime;
 
 #[test]
 fn simple_test() {

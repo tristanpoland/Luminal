@@ -1,16 +1,16 @@
 [package]
-name = "bust"
+name = "luminal"
 version = "0.1.0"
 edition = "2021"
-authors = ["BUST Team"]
+authors = ["Luminal Team"]
 description = "A DLL-boundary safe async runtime with tokio-compatible API"
 license = "MIT"
-repository = "https://github.com/user/bust"
-keywords = ["async", "runtime", "dll", "tokio", "executor"]
+repository = "https://github.com/tristanpoland/luminal"
+keywords = ["async", "runtime", "dll", "executor"]
 categories = ["asynchronous", "concurrency"]
 
 [lib]
-name = "bust"
+name = "luminal"
 path = "src/lib.rs"
 
 [dependencies]
@@ -25,5 +25,5 @@ slab = "0.4.9"
 pin-project-lite = "0.2.15"
 
 [dev-dependencies]
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.47.1", features = ["full"] }
 futures = "0.3"

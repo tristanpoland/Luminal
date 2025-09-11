@@ -1,4 +1,4 @@
-use bust::Runtime;
+use luminal::Runtime;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -133,7 +133,7 @@ fn test_runtime_handle() {
 
 #[tokio::test]
 async fn test_inside_tokio_runtime() {
-    // Test that BUST can run inside a tokio runtime
+    // Test that Luminal can run inside a tokio runtime
     let result = tokio::task::spawn_blocking(|| {
         let rt = Runtime::new().unwrap();
         let rt_clone = rt.clone();
@@ -147,11 +147,11 @@ async fn test_inside_tokio_runtime() {
 }
 
 #[tokio::test]
-async fn test_bust_and_tokio_interop() {
-    // Test spawning tokio tasks from within BUST
+async fn test_luminal_and_tokio_interop() {
+    // Test spawning tokio tasks from within Luminal
     let tokio_result = tokio::spawn(async { 42 }).await.unwrap();
     
-    let bust_result = tokio::task::spawn_blocking(move || {
+    let luminal_result = tokio::task::spawn_blocking(move || {
         let rt = Runtime::new().unwrap();
         let rt_clone = rt.clone();
         rt.block_on(async move {
@@ -159,7 +159,7 @@ async fn test_bust_and_tokio_interop() {
         })
     }).await.unwrap();
     
-    assert_eq!(bust_result, 84);
+    assert_eq!(luminal_result, 84);
 }
 
 #[test]

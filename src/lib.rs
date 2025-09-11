@@ -1,11 +1,11 @@
-//! # BUST Runtime
+//! # Luminal
 //!
-//! BUST (Burst Oriented Response Enhancer) is an async runtime designed to solve
+//! Luminal is a high-performance async runtime designed to solve
 //! tokio's DLL boundary issues while maintaining similar performance and API compatibility.
 //!
 //! ## Key Features
 //!
-//! - **DLL Boundary Safe**: Unlike tokio, BUST doesn't rely on thread-local storage, making it 100% safe to pass across DLL boundaries
+//! - **DLL Boundary Safe**: Unlike tokio, Luminal doesn't rely on thread-local storage, making it 100% safe to pass across DLL boundaries
 //! - **Explicit Handle Passing**: All runtime context is explicit rather than implicit via TLS
 //! - **Drop-in Replacement**: Provides tokio-compatible APIs like `spawn`, `block_on`, and `JoinHandle`
 //! - **Cross-Platform**: Works on Windows, Linux, and macOS
@@ -16,7 +16,7 @@
 //! ## Basic Usage
 //!
 //! ```rust
-//! use bust::Runtime;
+//! use luminal::Runtime;
 //!
 //! async fn hello_world() {
 //!     println!("Hello, world!");
@@ -34,31 +34,31 @@
 //! ## Explicit Runtime Usage
 //!
 //! ```rust
-//! use bust::Runtime;
+//! use luminal::Runtime;
 //!
 //! fn main() {
 //!     let rt = Runtime::new().unwrap();
 //!     rt.block_on(async {
-//!         println!("Running on BUST runtime!");
+//!         println!("Running on Luminal runtime!");
 //!     });
 //! }
 //! ```
 //!
 //! ## DLL Boundary Safety
 //!
-//! Unlike tokio, which uses thread-local storage for its runtime context, BUST uses explicit context passing.
+//! Unlike tokio, which uses thread-local storage for its runtime context, Luminal uses explicit context passing.
 //! This makes it safe to use across DLL boundaries:
 //!
 //! ```rust
 //! // Inside a DLL
-//! fn dll_function(runtime: bust::Runtime) -> u32 {
+//! fn dll_function(runtime: luminal::Runtime) -> u32 {
 //!     // Safe to use the runtime passed from outside
 //!     runtime.block_on(async { 42 })
 //! }
 //!
 //! // From the main application
 //! fn main() {
-//!     let rt = bust::Runtime::new().unwrap();
+//!     let rt = luminal::Runtime::new().unwrap();
 //!     let result = dll_function(rt.clone());
 //!     assert_eq!(result, 42);
 //! }
@@ -73,14 +73,14 @@ pub use runtime::{
     spawn, block_on
 };
 
-// Error types for the BUST runtime
+// Error types for the Luminal runtime
 pub use error::RuntimeError;
 
-/// Error types for the BUST runtime
+/// Error types for the Luminal runtime
 pub mod error {
     use std::fmt;
 
-    /// Errors that can occur when using the BUST runtime
+    /// Errors that can occur when using the Luminal runtime
     #[derive(Debug)]
     pub enum RuntimeError {
         /// The task queue is full and cannot accept more tasks

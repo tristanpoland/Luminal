@@ -1,7 +1,7 @@
 //! Worker thread implementation
 //!
 //! This module provides the implementation of worker threads,
-//! which are responsible for executing tasks in the BUST runtime.
+//! which are responsible for executing tasks in the Luminal runtime.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -18,7 +18,7 @@ use super::waker::create_task_waker;
 ///
 /// Each worker maintains its own local queue and can steal work from other workers
 /// or the global queue when its local queue is empty. This is the foundation of
-/// the work-stealing scheduler used in BUST.
+/// the work-stealing scheduler used in Luminal.
 pub(crate) struct WorkerThread {
     /// Unique ID for this worker
     #[allow(dead_code)]

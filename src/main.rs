@@ -1,6 +1,6 @@
-/// BUST Runtime Performance Benchmark and Demo Application
+/// Luminal Runtime Performance Benchmark and Demo Application
 ///
-/// This application demonstrates the capabilities of the BUST runtime
+/// This application demonstrates the capabilities of the Luminal runtime
 /// through various benchmarks and usage examples. It showcases:
 /// 
 /// - High throughput task processing
@@ -10,7 +10,7 @@
 /// - Multi-runtime concurrency
 /// - Basic usage examples
 
-use bust::Runtime;
+use luminal::Runtime;
 use std::time::Instant;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -64,7 +64,7 @@ async fn micro_task(id: usize) -> usize {
 /// a large number of small, lightweight tasks. It demonstrates the
 /// overhead of task scheduling and completion.
 async fn high_throughput_benchmark() {
-    println!("=== BUST Runtime High Throughput Benchmark ===");
+    println!("=== Luminal Runtime High Throughput Benchmark ===");
     
     let rt = Runtime::new().unwrap();
     
@@ -282,17 +282,17 @@ async fn whats_under_nikos_hat() {
     niko_do_your_thing().await.unwrap();
 }
 
-/// Main entry point for the BUST Runtime performance demo
+/// Main entry point for the Luminal Runtime performance demo
 ///
 /// Runs a series of benchmarks to demonstrate the capabilities and
-/// performance characteristics of the BUST async runtime, including:
+/// performance characteristics of the Luminal async runtime, including:
 ///
 /// - High throughput task processing
 /// - Concurrent runtime instances
 /// - Memory pressure testing
 /// - Basic usage examples
 fn main() {
-    println!("🚀 BUST Runtime Performance Demo 🚀");
+    println!("🚀 Luminal Runtime Performance Demo 🚀");
     
     // Create a runtime for benchmarks
     let rt = Runtime::new().unwrap();
@@ -317,5 +317,5 @@ fn main() {
     
     // Benchmark completion
     println!("✅ All benchmarks completed successfully!");
-    println!("🎯 BUST Runtime is production-ready with high-performance multi-threaded execution!");
+    println!("🎯 Luminal Runtime is production-ready with high-performance multi-threaded execution!");
 }

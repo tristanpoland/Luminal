@@ -1,6 +1,6 @@
-//! BUST Runtime Core Implementation
+//! Luminal Runtime Core Implementation
 //!
-//! This module provides the core components of the BUST async runtime,
+//! This module provides the core components of the Luminal async runtime,
 //! designed as a DLL-boundary safe alternative to tokio with similar 
 //! performance characteristics and API compatibility.
 //!

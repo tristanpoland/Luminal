@@ -1,7 +1,7 @@
 //! Main runtime implementation
 //!
 //! This module provides the Runtime implementation, which is the main entry point
-//! for using the BUST async runtime. It also provides global convenience functions
+//! for using the Luminal async runtime. It also provides global convenience functions
 //! for spawning tasks and blocking on futures.
 
 use std::future::Future;
@@ -13,7 +13,7 @@ use super::join_handle::JoinHandle;
 
 /// Main runtime for executing async tasks
 ///
-/// The Runtime is the central coordination point for the BUST async runtime.
+/// The Runtime is the central coordination point for the Luminal async runtime.
 /// It provides methods for spawning tasks, blocking on futures, and managing
 /// the runtime itself. Unlike tokio, this runtime is safe to pass across
 /// DLL boundaries as it doesn't rely on thread-local storage.
@@ -23,7 +23,7 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    /// Creates a new BUST runtime
+    /// Creates a new Luminal runtime
     ///
     /// This initializes a new multi-threaded runtime with a work-stealing scheduler
     /// using the number of available CPU cores. The runtime will create worker
@@ -40,11 +40,11 @@ impl Runtime {
     /// # Example
     ///
     /// ```
-    /// use bust::Runtime;
+    /// use luminal::Runtime;
     ///
     /// let rt = Runtime::new().unwrap();
     /// rt.block_on(async {
-    ///     println!("Running on BUST runtime!");
+    ///     println!("Running on Luminal runtime!");
     /// });
     /// ```
     pub fn new() -> Result<Self, crate::error::RuntimeError> {
@@ -74,7 +74,7 @@ impl Runtime {
     /// # Example
     ///
     /// ```
-    /// use bust::Runtime;
+    /// use luminal::Runtime;
     ///
     /// let rt = Runtime::new().unwrap();
     /// let handle = rt.spawn(async {
@@ -113,7 +113,7 @@ impl Runtime {
     /// # Example
     ///
     /// ```
-    /// use bust::Runtime;
+    /// use luminal::Runtime;
     ///
     /// let rt = Runtime::new().unwrap();
     /// let result = rt.block_on(async {
@@ -142,7 +142,7 @@ impl Runtime {
     /// # Example
     ///
     /// ```
-    /// use bust::Runtime;
+    /// use luminal::Runtime;
     ///
     /// let rt = Runtime::new().unwrap();
     /// let handle = rt.handle();
@@ -163,7 +163,7 @@ impl Runtime {
     /// # Example
     ///
     /// ```
-    /// use bust::Runtime;
+    /// use luminal::Runtime;
     ///
     /// let rt = Runtime::new().unwrap();
     /// let (queue_len, tasks_processed) = rt.stats();
@@ -194,7 +194,7 @@ impl Clone for Runtime {
 thread_local! {
     /// Thread-local runtime for global convenience functions
     ///
-    /// While BUST generally avoids thread-local storage for its core functionality
+    /// While Luminal generally avoids thread-local storage for its core functionality
     /// to ensure DLL boundary safety, these convenience functions use a thread-local
     /// runtime for ease of use when DLL boundary safety isn't a concern.
     static THREAD_RUNTIME: Runtime = Runtime::new().unwrap();
@@ -220,7 +220,7 @@ thread_local! {
 /// # Example
 ///
 /// ```
-/// use bust::spawn;
+/// use luminal::spawn;
 ///
 /// let handle = spawn(async {
 ///     // Some async work
@@ -255,7 +255,7 @@ where
 /// # Example
 ///
 /// ```
-/// use bust::block_on;
+/// use luminal::block_on;
 ///
 /// let result = block_on(async {
 ///     // Some async work

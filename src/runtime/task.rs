@@ -1,6 +1,6 @@
 //! Task representation and management
 //!
-//! This module defines the core task structures used in the BUST runtime,
+//! This module defines the core task structures used in the Luminal runtime,
 //! including task identifiers and the task structure itself.
 
 use std::future::Future;
@@ -50,7 +50,7 @@ impl TaskId {
 /// Represents an async task that can be scheduled and executed by the runtime
 ///
 /// Contains the task's unique identifier and its underlying future.
-/// This is the core unit of work within the BUST runtime.
+/// This is the core unit of work within the Luminal runtime.
 pub struct Task {
     /// The unique identifier for this task
     pub(crate) id: TaskId,

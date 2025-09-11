@@ -1,6 +1,6 @@
 //! Custom waker implementation
 //!
-//! This module provides a custom waker implementation for the BUST runtime.
+//! This module provides a custom waker implementation for the Luminal runtime.
 //! The waker is responsible for notifying the runtime when a task is ready to make progress.
 
 use std::sync::Arc;
@@ -23,7 +23,7 @@ struct WakerData {
     global_queue: Arc<Injector<Task>>,
 }
 
-/// Creates a task waker for the BUST runtime
+/// Creates a task waker for the Luminal runtime
 ///
 /// This function creates a custom waker that will re-queue tasks into the
 /// global queue when they are woken. This is a crucial part of the runtime's

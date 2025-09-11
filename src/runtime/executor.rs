@@ -1,6 +1,6 @@
 //! Task execution engine
 //!
-//! This module provides the core executor implementation for the BUST runtime.
+//! This module provides the core executor implementation for the Luminal runtime.
 //! The executor is responsible for scheduling and executing tasks.
 
 use std::future::Future;
@@ -75,7 +75,7 @@ impl ExecutorInner {
             };
             
             let handle = thread::Builder::new()
-                .name(format!("bust-worker-{}", i))
+                .name(format!("luminal-worker-{}", i))
                 .spawn(move || worker_thread.run())
                 .expect("Failed to spawn worker thread");
             
@@ -136,7 +136,7 @@ impl Drop for ExecutorInner {
     }
 }
 
-/// Core task execution engine for the BUST runtime
+/// Core task execution engine for the Luminal runtime
 ///
 /// The Executor is responsible for scheduling and executing tasks.
 /// It maintains a global task queue and a set of worker threads that
