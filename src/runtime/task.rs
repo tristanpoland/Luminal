@@ -90,3 +90,16 @@ impl Task {
         self.future.as_mut().poll(cx)
     }
 }
+
+impl Default for Task {
+    /// Creates a default task with a completed future
+    ///
+    /// This is used as a placeholder when taking ownership of tasks
+    /// to avoid memory alignment issues.
+    fn default() -> Self {
+        Self {
+            id: TaskId::new(),
+            future: Box::pin(async {}),
+        }
+    }
+}

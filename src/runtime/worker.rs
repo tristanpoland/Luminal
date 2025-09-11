@@ -103,21 +103,10 @@ impl WorkerThread {
                 self.tasks_processed.fetch_add(1, Ordering::Relaxed);
             }
             std::task::Poll::Pending => {
-                // Re-queue the task for later execution
-                // SAFETY IMPROVEMENT: Use a better approach than unsafe ptr::read
-                // which could lead to double-free or use-after-free issues
-                
-                // Clone the task and push it back to the queue
-                // This avoids unsafe code altogether
-                let task_id = task.id;
-                
-                // Use global_queue instead of worker's queue to avoid potential overflow
-                // This is safer at the cost of some performance
-                self.global_queue.push(std::mem::replace(
-                    task,
-                    // This placeholder will be dropped immediately
-                    Task::new(task_id, Box::pin(async {}))
-                ));
+                // Re-queue the task for later execution without unsafe operations
+                // Take ownership of the task to avoid memory issues
+                let owned_task = std::mem::take(task);
+                self.global_queue.push(owned_task);
             }
         }
     }
