@@ -1,5 +1,5 @@
 [package]
-name = "luminal"
+name = "luminal_rt"
 version = "0.1.0"
 edition = "2021"
 authors = ["Luminal Team"]
