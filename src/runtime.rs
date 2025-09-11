@@ -1,3 +1,10 @@
+/// Runtime module implementing the core BUST async runtime functionality
+///
+/// This module provides the implementation of the BUST async runtime,
+/// including task scheduling, work-stealing algorithm, and runtime management.
+/// It offers a tokio-compatible API while avoiding thread-local storage
+/// to ensure safety across DLL boundaries.
+
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, AtomicUsize, AtomicBool, Ordering};
@@ -7,10 +14,17 @@ use std::time::{Duration, Instant};
 use std::thread;
 use std::fmt;
 
+/// Errors that can occur when working with tasks in the runtime
+///
+/// These represent the various failure modes that can occur when 
+/// scheduling, executing, or awaiting tasks.
 #[derive(Debug)]
 pub enum TaskError {
+    /// The channel used to communicate with a task has been disconnected
     Disconnected,
+    /// A timeout occurred while waiting for a task to complete
     Timeout,
+    /// The task panicked during execution
     Panicked,
 }
 
@@ -30,35 +44,63 @@ use crossbeam_deque::{Injector, Stealer, Worker};
 use crossbeam_channel::{bounded, Receiver, TryRecvError};
 
 
+/// A unique identifier for tasks within the runtime
+///
+/// Each task is assigned a unique ID when it's created, which is used
+/// for tracking and managing the task throughout its lifetime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TaskId(u64);
 
 impl TaskId {
+    /// Creates a new unique task ID
+    ///
+    /// Uses an atomic counter to ensure uniqueness across threads
+    #[allow(dead_code)]
     fn new() -> Self {
         static NEXT_ID: AtomicU64 = AtomicU64::new(1);
         TaskId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
     }
 }
 
+/// Type alias for a boxed future that can be sent across threads
 type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
+/// Represents an async task that can be scheduled and executed by the runtime
+///
+/// Contains the task's unique identifier and its underlying future.
 pub struct Task {
+    /// The unique identifier for this task
+    #[allow(dead_code)]
     id: TaskId,
+    
+    /// The actual future that will be executed
     future: BoxFuture,
 }
 
 impl Task {
+    /// Creates a new task with the given ID and future
     fn new(id: TaskId, future: BoxFuture) -> Self {
         Self { id, future }
     }
     
+    /// Polls the task's future, advancing its execution
+    ///
+    /// Returns Poll::Ready(()) when the future completes,
+    /// or Poll::Pending if it's not ready yet.
     fn poll(&mut self, cx: &mut Context<'_>) -> Poll<()> {
         self.future.as_mut().poll(cx)
     }
 }
 
+/// Handle for awaiting the completion of an asynchronous task
+///
+/// Similar to tokio's JoinHandle, this allows waiting for a task to complete
+/// and retrieving its result.
 pub struct JoinHandle<T> {
+    /// The unique identifier of the task
     id: TaskId,
+    
+    /// Channel for receiving the task's result when it completes
     receiver: Receiver<T>,
 }
 
