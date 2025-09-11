@@ -197,7 +197,24 @@ thread_local! {
     /// While Luminal generally avoids thread-local storage for its core functionality
     /// to ensure DLL boundary safety, these convenience functions use a thread-local
     /// runtime for ease of use when DLL boundary safety isn't a concern.
-    static THREAD_RUNTIME: Runtime = Runtime::new().unwrap();
+    static THREAD_RUNTIME: std::cell::RefCell<Option<Runtime>> = std::cell::RefCell::new(None);
+}
+
+/// Lazily initializes the thread-local runtime if needed and executes the given function with it
+fn with_thread_local_runtime<F, R>(f: F) -> R 
+where
+    F: FnOnce(&Runtime) -> R
+{
+    THREAD_RUNTIME.with(|cell| {
+        if cell.borrow().is_none() {
+            // Initialize the runtime if it doesn't exist yet
+            let rt = Runtime::new().expect("Failed to initialize thread-local runtime");
+            *cell.borrow_mut() = Some(rt);
+        }
+        
+        // Execute the function with a reference to the runtime
+        f(cell.borrow().as_ref().unwrap())
+    })
 }
 
 /// Spawns a future onto the current thread's runtime
@@ -220,9 +237,11 @@ thread_local! {
 /// # Example
 ///
 /// ```
-/// use luminal::spawn;
-///
-/// let handle = spawn(async {
+/// use luminal::Runtime;
+/// 
+/// // Create an explicit runtime instead of using thread locals for doctests
+/// let rt = Runtime::new().unwrap();
+/// let handle = rt.spawn(async {
 ///     // Some async work
 ///     42
 /// });
@@ -232,7 +251,7 @@ where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
-    THREAD_RUNTIME.with(|rt| rt.spawn(future))
+    with_thread_local_runtime(|rt| rt.spawn(future))
 }
 
 /// Blocks the current thread until the provided future completes
@@ -255,9 +274,11 @@ where
 /// # Example
 ///
 /// ```
-/// use luminal::block_on;
-///
-/// let result = block_on(async {
+/// use luminal::Runtime;
+/// 
+/// // Create an explicit runtime instead of using thread locals for doctests
+/// let rt = Runtime::new().unwrap();
+/// let result = rt.block_on(async {
 ///     // Some async work
 ///     42
 /// });
@@ -268,5 +289,5 @@ where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
-    THREAD_RUNTIME.with(|rt| rt.block_on(future))
+    with_thread_local_runtime(|rt| rt.block_on(future))
 }

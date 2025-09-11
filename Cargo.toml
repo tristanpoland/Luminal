@@ -14,15 +14,15 @@ name = "luminal"
 path = "src/lib.rs"
 
 [dependencies]
-async-std = "1.13.0"
-crossbeam-queue = "0.3.11"
+async-std = "1.13.2"
+crossbeam-queue = "0.3.12"
 crossbeam-channel = "0.5.8"
 crossbeam-deque = "0.8.5"
-crossbeam-utils = "0.8.19"
+crossbeam-utils = "0.8.21"
 parking_lot = "0.12.3"
 mio = "1.0.2"
-slab = "0.4.9"
-pin-project-lite = "0.2.15"
+slab = "0.4.11"
+pin-project-lite = "0.2.16"
 
 [dev-dependencies]
 tokio = { version = "1.47.1", features = ["full"] }
