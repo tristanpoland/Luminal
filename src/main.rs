@@ -1,5 +1,5 @@
 use bust::Runtime;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ async fn cpu_intensive_task(iterations: usize) -> usize {
         sum += i * i;
         if i % 1000 == 0 {
             // Yield periodically to allow other tasks to run
-            futures::future::ready(()).await;
+            std::future::ready(()).await;
         }
     }
     sum

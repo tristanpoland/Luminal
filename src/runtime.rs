@@ -7,9 +7,8 @@ use std::time::{Duration, Instant};
 use std::thread;
 
 use crossbeam_deque::{Injector, Stealer, Worker};
-use crossbeam_channel::{bounded, unbounded, Receiver, Sender, TryRecvError};
-use parking_lot::{Mutex, Condvar};
-use mio::{Events, Poll as MioPoll, Token, Interest, Registry};
+use crossbeam_channel::{bounded, Receiver, TryRecvError};
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TaskId(u64);
@@ -23,7 +22,6 @@ impl TaskId {
 
 type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
-#[derive(Clone)]
 pub struct Task {
     id: TaskId,
     future: BoxFuture,
@@ -66,7 +64,7 @@ struct WorkerThread {
 }
 
 impl WorkerThread {
-    fn run(mut self) {
+    fn run(self) {
         let mut idle_count = 0u32;
         
         loop {
@@ -102,7 +100,7 @@ impl WorkerThread {
     }
     
     fn run_task(&self, task: &mut Task) {
-        let waker = create_task_waker(task.id, self.global_queue.clone(), self.worker.clone());
+        let waker = create_task_waker(task.id, self.global_queue.clone());
         let mut cx = Context::from_waker(&waker);
         
         match task.poll(&mut cx) {
@@ -125,18 +123,26 @@ impl WorkerThread {
     fn steal_work(&self) -> bool {
         // Try to steal from global queue first (batch steal for efficiency)
         for _ in 0..16 {
-            if let Some(task) = self.global_queue.steal() {
-                self.worker.push(task);
-                return true;
+            match self.global_queue.steal() {
+                crossbeam_deque::Steal::Success(task) => {
+                    self.worker.push(task);
+                    return true;
+                }
+                crossbeam_deque::Steal::Empty => break,
+                crossbeam_deque::Steal::Retry => continue,
             }
         }
         
         // Try to steal from other workers
         for stealer in &self.stealers {
-            if stealer.stealer() as *const _ != &self.worker.stealer() as *const _ {
-                if let Some(task) = stealer.steal() {
-                    self.worker.push(task);
-                    return true;
+            if stealer as *const _ != &self.worker.stealer() as *const _ {
+                match stealer.steal() {
+                    crossbeam_deque::Steal::Success(task) => {
+                        self.worker.push(task);
+                        return true;
+                    }
+                    crossbeam_deque::Steal::Empty => continue,
+                    crossbeam_deque::Steal::Retry => continue,
                 }
             }
         }
@@ -145,7 +151,7 @@ impl WorkerThread {
     }
 }
 
-fn create_task_waker(task_id: TaskId, global_queue: Arc<Injector<Task>>, worker: Worker<Task>) -> Waker {
+fn create_task_waker(_task_id: TaskId, global_queue: Arc<Injector<Task>>) -> Waker {
     use std::task::{RawWaker, RawWakerVTable};
     
     struct WakerData {
@@ -170,7 +176,7 @@ fn create_task_waker(task_id: TaskId, global_queue: Arc<Injector<Task>>, worker:
     );
     
     let data = Box::into_raw(Box::new(WakerData {
-        task_id,
+        task_id: _task_id,
         global_queue,
     }));
     
@@ -179,7 +185,6 @@ fn create_task_waker(task_id: TaskId, global_queue: Arc<Injector<Task>>, worker:
 
 struct ExecutorInner {
     global_queue: Arc<Injector<Task>>,
-    workers: Vec<Worker<Task>>,
     worker_handles: Vec<thread::JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
     next_task_id: AtomicU64,
@@ -196,22 +201,17 @@ impl ExecutorInner {
             .map(|n| n.get())
             .unwrap_or(4);
         
-        let mut workers = Vec::with_capacity(num_workers);
         let mut stealers = Vec::with_capacity(num_workers);
         let mut worker_handles = Vec::with_capacity(num_workers);
         
-        // Create worker queues
-        for _ in 0..num_workers {
+        // Create workers for each thread (workers are not shared)
+        for i in 0..num_workers {
             let worker = Worker::new_fifo();
             stealers.push(worker.stealer());
-            workers.push(worker);
-        }
-        
-        // Start worker threads
-        for (i, worker) in workers.iter().enumerate() {
+            
             let worker_thread = WorkerThread {
                 id: i,
-                worker: worker.clone(),
+                worker,
                 stealers: stealers.clone(),
                 global_queue: global_queue.clone(),
                 shutdown: shutdown.clone(),
@@ -228,7 +228,6 @@ impl ExecutorInner {
         
         ExecutorInner {
             global_queue,
-            workers,
             worker_handles,
             shutdown,
             next_task_id: AtomicU64::new(1),
@@ -240,13 +239,8 @@ impl ExecutorInner {
         let task_id = TaskId(self.next_task_id.fetch_add(1, Ordering::Relaxed));
         let task = Task::new(task_id, future);
         
-        // Use round-robin to distribute work initially
-        let worker_idx = task_id.0 as usize % self.workers.len();
-        if let Some(worker) = self.workers.get(worker_idx) {
-            worker.push(task);
-        } else {
-            self.global_queue.push(task);
-        }
+        // Always use global queue for task distribution
+        self.global_queue.push(task);
         
         task_id
     }
@@ -320,8 +314,7 @@ impl Executor {
                         crossbeam_deque::Steal::Success(mut task) => {
                             let waker = create_task_waker(
                                 task.id, 
-                                self.inner.global_queue.clone(),
-                                Worker::new_fifo() // Temporary worker for blocking context
+                                self.inner.global_queue.clone()
                             );
                             let mut cx = Context::from_waker(&waker);
 
