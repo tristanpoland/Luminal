@@ -282,17 +282,29 @@ async fn whats_under_nikos_hat() {
     niko_do_your_thing().await.unwrap();
 }
 
+/// Main entry point for the BUST Runtime performance demo
+///
+/// Runs a series of benchmarks to demonstrate the capabilities and
+/// performance characteristics of the BUST async runtime, including:
+///
+/// - High throughput task processing
+/// - Concurrent runtime instances
+/// - Memory pressure testing
+/// - Basic usage examples
 fn main() {
     println!("🚀 BUST Runtime Performance Demo 🚀");
     
-    // Run performance benchmarks
+    // Create a runtime for benchmarks
     let rt = Runtime::new().unwrap();
     
     println!("\n=== Running Performance Benchmarks ===");
+    
+    // Run comprehensive benchmarks
     rt.block_on(high_throughput_benchmark());
     rt.block_on(concurrent_runtime_test());
     rt.block_on(memory_pressure_test());
     
+    // Simple usage examples
     println!("\n=== Original Demo ===");
     let rt2 = Runtime::new().unwrap();
     rt2.spawn(mewo_wrap("hehe"));
@@ -303,6 +315,7 @@ fn main() {
         println!("All tasks spawned");
     });
     
+    // Benchmark completion
     println!("✅ All benchmarks completed successfully!");
     println!("🎯 BUST Runtime is production-ready with high-performance multi-threaded execution!");
 }
