@@ -696,9 +696,37 @@ impl Handle {
 
 // Thread-local runtime for global functions
 thread_local! {
+    /// Thread-local runtime for global convenience functions
+    ///
+    /// While BUST generally avoids thread-local storage for its core functionality
+    /// to ensure DLL boundary safety, these convenience functions use a thread-local
+    /// runtime for ease of use when DLL boundary safety isn't a concern.
     static THREAD_RUNTIME: Runtime = Runtime::new().unwrap();
 }
 
+/// Spawns a future onto the current thread's runtime
+///
+/// This is a convenience function that uses a thread-local runtime.
+/// For DLL boundary safety, create and use an explicit Runtime instead.
+///
+/// # Parameters
+///
+/// * `future` - The future to execute
+///
+/// # Returns
+///
+/// A JoinHandle that can be used to await the future's completion
+///
+/// # Example
+///
+/// ```
+/// use bust::spawn;
+///
+/// let handle = spawn(async {
+///     // Some async work
+///     42
+/// });
+/// ```
 pub fn spawn<F>(future: F) -> JoinHandle<F::Output>
 where
     F: Future + Send + 'static,
@@ -707,6 +735,30 @@ where
     THREAD_RUNTIME.with(|rt| rt.spawn(future))
 }
 
+/// Blocks the current thread until the provided future completes
+///
+/// This is a convenience function that uses a thread-local runtime.
+/// For DLL boundary safety, create and use an explicit Runtime instead.
+///
+/// # Parameters
+///
+/// * `future` - The future to execute and wait for
+///
+/// # Returns
+///
+/// The output of the future
+///
+/// # Example
+///
+/// ```
+/// use bust::block_on;
+///
+/// let result = block_on(async {
+///     // Some async work
+///     42
+/// });
+/// assert_eq!(result, 42);
+/// ```
 pub fn block_on<F>(future: F) -> F::Output
 where
     F: Future + Send + 'static,
