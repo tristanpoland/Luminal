@@ -25,21 +25,29 @@
 //! - `waker`: Custom waker implementation
 
 mod error;
+#[cfg(feature = "std")]
 mod executor;
+#[cfg(not(feature = "std"))]
+mod simple_executor;
 mod handle;
 mod join_handle;
 mod runtime;
 mod task;
+#[cfg(feature = "std")]
 mod worker;
 mod waker;
 
 // Re-export public components
 pub use self::error::TaskError;
+#[cfg(feature = "std")]
 pub use self::executor::Executor;
+#[cfg(not(feature = "std"))]
+pub use self::simple_executor::SimpleExecutor as Executor;
 pub use self::handle::Handle;
 pub use self::join_handle::JoinHandle;
 pub use self::runtime::Runtime;
 pub use self::task::TaskId;
 
-// Global convenience functions
+// Global convenience functions (std only)
+#[cfg(feature = "std")]
 pub use self::runtime::{spawn, block_on};

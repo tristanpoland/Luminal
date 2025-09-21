@@ -4,10 +4,19 @@
 //! for using the Luminal async runtime. It also provides global convenience functions
 //! for spawning tasks and blocking on futures.
 
-use std::future::Future;
-use std::sync::Arc;
+#[cfg(feature = "std")]
+use std::{future::Future, sync::Arc};
 
+#[cfg(not(feature = "std"))]
+use core::future::Future;
+
+#[cfg(not(feature = "std"))]
+use alloc::sync::Arc;
+
+#[cfg(feature = "std")]
 use super::executor::Executor;
+#[cfg(not(feature = "std"))]
+use super::simple_executor::SimpleExecutor as Executor;
 use super::handle::Handle;
 use super::join_handle::JoinHandle;
 
@@ -190,31 +199,111 @@ impl Clone for Runtime {
     }
 }
 
-// Thread-local runtime for global convenience functions
-thread_local! {
-    /// Thread-local runtime for global convenience functions
-    ///
-    /// While Luminal generally avoids thread-local storage for its core functionality
-    /// to ensure DLL boundary safety, these convenience functions use a thread-local
-    /// runtime for ease of use when DLL boundary safety isn't a concern.
-    static THREAD_RUNTIME: std::cell::RefCell<Option<Runtime>> = std::cell::RefCell::new(None);
-}
+#[cfg(feature = "std")]
+mod thread_local_support {
+    use super::*;
 
-/// Lazily initializes the thread-local runtime if needed and executes the given function with it
-fn with_thread_local_runtime<F, R>(f: F) -> R 
-where
-    F: FnOnce(&Runtime) -> R
-{
-    THREAD_RUNTIME.with(|cell| {
-        if cell.borrow().is_none() {
-            // Initialize the runtime if it doesn't exist yet
-            let rt = Runtime::new().expect("Failed to initialize thread-local runtime");
-            *cell.borrow_mut() = Some(rt);
-        }
-        
-        // Execute the function with a reference to the runtime
-        f(cell.borrow().as_ref().unwrap())
-    })
+    // Thread-local runtime for global convenience functions
+    thread_local! {
+        /// Thread-local runtime for global convenience functions
+        ///
+        /// While Luminal generally avoids thread-local storage for its core functionality
+        /// to ensure DLL boundary safety, these convenience functions use a thread-local
+        /// runtime for ease of use when DLL boundary safety isn't a concern.
+        static THREAD_RUNTIME: std::cell::RefCell<Option<Runtime>> = std::cell::RefCell::new(None);
+    }
+
+    /// Lazily initializes the thread-local runtime if needed and executes the given function with it
+    fn with_thread_local_runtime<F, R>(f: F) -> R
+    where
+        F: FnOnce(&Runtime) -> R
+    {
+        THREAD_RUNTIME.with(|cell| {
+            if cell.borrow().is_none() {
+                // Initialize the runtime if it doesn't exist yet
+                let rt = Runtime::new().expect("Failed to initialize thread-local runtime");
+                *cell.borrow_mut() = Some(rt);
+            }
+
+            // Execute the function with a reference to the runtime
+            f(cell.borrow().as_ref().unwrap())
+        })
+    }
+
+    /// Spawns a future onto the current thread's runtime
+    ///
+    /// This is a convenience function that uses a thread-local runtime.
+    /// For DLL boundary safety, create and use an explicit Runtime instead.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `F` - The future type
+    ///
+    /// # Parameters
+    ///
+    /// * `future` - The future to execute
+    ///
+    /// # Returns
+    ///
+    /// A JoinHandle that can be used to await the future's completion
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use luminal::Runtime;
+    ///
+    /// // Create an explicit runtime instead of using thread locals for doctests
+    /// let rt = Runtime::new().unwrap();
+    /// let handle = rt.spawn(async {
+    ///     // Some async work
+    ///     42
+    /// });
+    /// ```
+    pub fn spawn<F>(future: F) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        with_thread_local_runtime(|rt| rt.spawn(future))
+    }
+
+    /// Blocks the current thread until the provided future completes
+    ///
+    /// This is a convenience function that uses a thread-local runtime.
+    /// For DLL boundary safety, create and use an explicit Runtime instead.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `F` - The future type
+    ///
+    /// # Parameters
+    ///
+    /// * `future` - The future to execute and wait for
+    ///
+    /// # Returns
+    ///
+    /// The output of the future
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use luminal::Runtime;
+    ///
+    /// // Create an explicit runtime instead of using thread locals for doctests
+    /// let rt = Runtime::new().unwrap();
+    /// let result = rt.block_on(async {
+    ///     // Some async work
+    ///     42
+    /// });
+    /// assert_eq!(result, 42);
+    /// ```
+    pub fn block_on<F>(future: F) -> F::Output
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        with_thread_local_runtime(|rt| rt.block_on(future))
+    }
 }
 
 /// Spawns a future onto the current thread's runtime
@@ -222,36 +311,14 @@ where
 /// This is a convenience function that uses a thread-local runtime.
 /// For DLL boundary safety, create and use an explicit Runtime instead.
 ///
-/// # Type Parameters
-///
-/// * `F` - The future type
-///
-/// # Parameters
-///
-/// * `future` - The future to execute
-///
-/// # Returns
-///
-/// A JoinHandle that can be used to await the future's completion
-///
-/// # Example
-///
-/// ```
-/// use luminal::Runtime;
-/// 
-/// // Create an explicit runtime instead of using thread locals for doctests
-/// let rt = Runtime::new().unwrap();
-/// let handle = rt.spawn(async {
-///     // Some async work
-///     42
-/// });
-/// ```
+/// This function is only available when the `std` feature is enabled.
+#[cfg(feature = "std")]
 pub fn spawn<F>(future: F) -> JoinHandle<F::Output>
 where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
-    with_thread_local_runtime(|rt| rt.spawn(future))
+    thread_local_support::spawn(future)
 }
 
 /// Blocks the current thread until the provided future completes
@@ -259,35 +326,12 @@ where
 /// This is a convenience function that uses a thread-local runtime.
 /// For DLL boundary safety, create and use an explicit Runtime instead.
 ///
-/// # Type Parameters
-///
-/// * `F` - The future type
-///
-/// # Parameters
-///
-/// * `future` - The future to execute and wait for
-///
-/// # Returns
-///
-/// The output of the future
-///
-/// # Example
-///
-/// ```
-/// use luminal::Runtime;
-/// 
-/// // Create an explicit runtime instead of using thread locals for doctests
-/// let rt = Runtime::new().unwrap();
-/// let result = rt.block_on(async {
-///     // Some async work
-///     42
-/// });
-/// assert_eq!(result, 42);
-/// ```
+/// This function is only available when the `std` feature is enabled.
+#[cfg(feature = "std")]
 pub fn block_on<F>(future: F) -> F::Output
 where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
-    with_thread_local_runtime(|rt| rt.block_on(future))
+    thread_local_support::block_on(future)
 }

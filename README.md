@@ -2,7 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Luminal is a high-performance async runtime designed to solve tokio's DLL boundary issues while maintaining similar performance and API compatibility.
+Luminal is a high-performance async runtime designed to solve tokio's DLL boundary issues while maintaining similar performance and API compatibility. It works in both `std` and `no_std` environments.
+
+📖 **[no_std Documentation](NOSTD.md)** - Complete guide for using Luminal in embedded and constrained environments
 
 ![Performance Comparison](./image.png)
 
@@ -12,18 +14,29 @@ Luminal is a high-performance async runtime designed to solve tokio's DLL bounda
 - **Explicit Handle Passing**: All runtime context is explicit rather than implicit via TLS
 - **Drop-in Replacement**: Provides tokio-compatible APIs like `spawn`, `block_on`, and `JoinHandle`
 - **Cross-Platform**: Works on Windows, Linux, and macOS
-- **Multi-threaded**: Uses a work-stealing scheduler with multiple worker threads for optimal CPU utilization
+- **Multi-threaded**: Uses a work-stealing scheduler with multiple worker threads for optimal CPU utilization (std only)
 - **Efficient Work Stealing**: Implements a sophisticated work-stealing algorithm to distribute tasks evenly across worker threads
 - **Memory Efficient**: Minimizes allocations and memory overhead in the task scheduling system
+- **🔧 no_std Support**: Full async runtime support for embedded and constrained environments with `alloc`
+- **Single-threaded Mode**: Simplified execution model for no_std environments
 
 ## Installation
 
 Add Luminal to your `Cargo.toml`:
 
+### For `std` environments (default):
 ```toml
 [dependencies]
-luminal = "0.1.0"
+luminal = "0.3.0"
 ```
+
+### For `no_std` environments:
+```toml
+[dependencies]
+luminal = { version = "0.3.0", default-features = false }
+```
+
+See the **[no_std guide](NOSTD.md)** for detailed instructions on using Luminal in embedded environments.
 
 ## Basic Usage
 
@@ -115,7 +128,7 @@ let result = handle.block_on(task);
 
 ### Global Functions
 
-For convenience, Luminal also provides global functions (though these use thread-local storage):
+For convenience, Luminal also provides global functions (only available with `std` feature):
 
 ```rust
 use luminal::{spawn, block_on};
@@ -126,6 +139,8 @@ let handle = spawn(async { 42 });
 // Block on a future using the current thread's runtime
 let result = block_on(handle);
 ```
+
+**Note**: Global functions use thread-local storage and are only available when the `std` feature is enabled. For `no_std` environments, always use explicit runtime instances.
 
 ## Benchmarks
 

@@ -3,15 +3,20 @@
 //! This module provides the core executor implementation for the Luminal runtime.
 //! The executor is responsible for scheduling and executing tasks.
 
-use std::future::Future;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::task::Context;
-use std::thread;
-use std::time::Duration;
-use std::cell::RefCell;
+#[cfg(feature = "std")]
+use std::{future::Future, sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering}, sync::Arc, task::Context, thread, time::Duration, cell::RefCell};
 
+#[cfg(not(feature = "std"))]
+use core::{future::Future, sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering}, task::Context, cell::RefCell};
+
+#[cfg(not(feature = "std"))]
+use alloc::{sync::Arc, vec::Vec, boxed::Box};
+
+#[cfg(feature = "std")]
 use crossbeam_channel::unbounded;
+
+#[cfg(not(feature = "std"))]
+use heapless::mpmc::MpMcQueue;
 use crossbeam_deque::{Injector, Steal, Worker};
 
 use super::join_handle::JoinHandle;
@@ -19,7 +24,8 @@ use super::task::{BoxFuture, Task, TaskId};
 use super::waker::create_task_waker;
 use super::worker::WorkerThread;
 
-// Thread-local worker for ultra-fast task spawning
+// Thread-local worker for ultra-fast task spawning (std only)
+#[cfg(feature = "std")]
 thread_local! {
     static LOCAL_WORKER: RefCell<Option<Worker<Task>>> = RefCell::new(None);
 }
@@ -28,24 +34,41 @@ thread_local! {
 ///
 /// This structure contains the shared state of the executor,
 /// including the task queue, worker threads, and statistics.
+#[cfg(feature = "std")]
 struct ExecutorInner {
     /// Global task queue used by all workers
     global_queue: Arc<Injector<Task>>,
-    
+
     /// Handles to the worker threads
     worker_handles: Vec<thread::JoinHandle<()>>,
-    
+
     /// Flag indicating whether the executor is shutting down
     shutdown: Arc<AtomicBool>,
-    
+
     /// Counter for generating unique task IDs
     next_task_id: AtomicU64,
-    
+
     /// Counter for the number of tasks processed
     tasks_processed: Arc<AtomicUsize>,
-    
+
     /// All worker stealers for work distribution
     all_stealers: Arc<Vec<crossbeam_deque::Stealer<Task>>>,
+}
+
+/// Inner state of the executor shared between instances (no_std version)
+///
+/// This structure contains the simplified shared state of the executor
+/// for no_std environments, without threading support.
+#[cfg(not(feature = "std"))]
+struct ExecutorInner {
+    /// Global task queue used by the single-threaded executor
+    global_queue: Arc<Injector<Task>>,
+
+    /// Counter for generating unique task IDs
+    next_task_id: AtomicU64,
+
+    /// Counter for the number of tasks processed
+    tasks_processed: Arc<AtomicUsize>,
 }
 
 impl ExecutorInner {

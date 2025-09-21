@@ -12,6 +12,7 @@
 //! - **Multi-threaded**: Uses a work-stealing scheduler with multiple worker threads for optimal CPU utilization
 //! - **Efficient Work Stealing**: Implements a sophisticated work-stealing algorithm to distribute tasks evenly across worker threads
 //! - **Memory Efficient**: Minimizes allocations and memory overhead in the task scheduling system
+//! - **No-std Support**: Can run in `no_std` environments with `alloc` for embedded and constrained systems
 //!
 //! ## Basic Usage
 //!
@@ -63,6 +64,11 @@
 //!     assert_eq!(result, 42);
 //! }
 //! ```
+#![cfg_attr(not(feature = "std"), no_std)]
+
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
 
 // Re-export core components
 pub mod runtime;
@@ -70,25 +76,34 @@ pub mod runtime;
 // Main runtime components
 pub use runtime::{
     Runtime, Handle, JoinHandle, Executor,
-    spawn, block_on
 };
+
+// Global convenience functions (std only)
+#[cfg(feature = "std")]
+pub use runtime::{spawn, block_on};
 
 // Error types for the Luminal runtime
 pub use error::RuntimeError;
 
 /// Error types for the Luminal runtime
 pub mod error {
+    #[cfg(feature = "std")]
     use std::fmt;
+    #[cfg(not(feature = "std"))]
+    use core::fmt;
+
+    #[cfg(not(feature = "std"))]
+    use alloc::string::String;
 
     /// Errors that can occur when using the Luminal runtime
     #[derive(Debug)]
     pub enum RuntimeError {
         /// The task queue is full and cannot accept more tasks
         TaskQueueFull,
-        
+
         /// The runtime has not been properly initialized
         RuntimeNotInitialized,
-        
+
         /// A task has panicked during execution
         ///
         /// Contains the panic message if available
@@ -105,5 +120,6 @@ pub mod error {
         }
     }
 
+    #[cfg(feature = "std")]
     impl std::error::Error for RuntimeError {}
 }

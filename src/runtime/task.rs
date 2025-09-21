@@ -3,10 +3,14 @@
 //! This module defines the core task structures used in the Luminal runtime,
 //! including task identifiers and the task structure itself.
 
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::task::{Context, Poll};
+#[cfg(feature = "std")]
+use std::{future::Future, pin::Pin, sync::atomic::{AtomicU64, Ordering}, task::{Context, Poll}};
+
+#[cfg(not(feature = "std"))]
+use core::{future::Future, pin::Pin, sync::atomic::{AtomicU64, Ordering}, task::{Context, Poll}};
+
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
 
 /// Type alias for a boxed future that can be sent across threads
 ///

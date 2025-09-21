@@ -3,7 +3,10 @@
 //! This module defines the error types that can occur during
 //! task execution and management within the Luminal runtime.
 
+#[cfg(feature = "std")]
 use std::fmt;
+#[cfg(not(feature = "std"))]
+use core::fmt;
 
 /// Errors that can occur when working with tasks in the runtime
 ///
@@ -40,4 +43,5 @@ impl fmt::Display for TaskError {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for TaskError {}

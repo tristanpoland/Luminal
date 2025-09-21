@@ -3,10 +3,19 @@
 //! This module provides the implementation of Handle, which is a lightweight
 //! reference to a Runtime that can be used to spawn tasks and block on futures.
 
-use std::future::Future;
-use std::sync::Arc;
+#[cfg(feature = "std")]
+use std::{future::Future, sync::Arc};
 
+#[cfg(not(feature = "std"))]
+use core::future::Future;
+
+#[cfg(not(feature = "std"))]
+use alloc::sync::Arc;
+
+#[cfg(feature = "std")]
 use super::executor::Executor;
+#[cfg(not(feature = "std"))]
+use super::simple_executor::SimpleExecutor as Executor;
 use super::join_handle::JoinHandle;
 
 /// A lightweight handle to a Runtime

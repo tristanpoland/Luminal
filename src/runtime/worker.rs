@@ -3,13 +3,16 @@
 //! This module provides the implementation of worker threads,
 //! which are responsible for executing tasks in the Luminal runtime.
 
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::task::Context;
-use std::thread;
-use std::time::Duration;
+#[cfg(feature = "std")]
+use std::{sync::atomic::{AtomicBool, AtomicUsize, Ordering}, sync::Arc, task::Context, thread, time::Duration};
 
-use crossbeam_deque::{Injector, Stealer, Worker};
+#[cfg(not(feature = "std"))]
+use core::{sync::atomic::{AtomicBool, AtomicUsize, Ordering}, task::Context};
+
+#[cfg(not(feature = "std"))]
+use alloc::{sync::Arc, vec::Vec};
+
+use crossbeam_deque::{Injector, Stealer, Worker, Steal};
 
 use super::task::Task;
 use super::waker::create_task_waker;
@@ -46,6 +49,10 @@ impl WorkerThread {
     /// This method continuously processes tasks from its local queue,
     /// stealing from other workers when necessary, and backing off when
     /// no work is available to reduce CPU usage.
+    ///
+    /// Note: In no_std environments, this provides basic task processing
+    /// without thread sleep/yield functionality.
+    #[cfg(feature = "std")]
     pub fn run(self) {
         let mut idle_count = 0u32;
         
@@ -88,6 +95,36 @@ impl WorkerThread {
             }
         }
     }
+
+    /// The main execution loop for the worker thread (no_std version)
+    ///
+    /// This provides a simplified execution loop that doesn't use thread-specific
+    /// functions like sleep or yield_now, making it suitable for no_std environments.
+    #[cfg(not(feature = "std"))]
+    pub fn run(self) {
+        loop {
+            // Check if shutdown signal has been received
+            if self.shutdown.load(Ordering::Acquire) {
+                break;
+            }
+
+            let mut found_work = false;
+
+            // Process local queue first (LIFO for better cache locality)
+            while let Some(mut task) = self.worker.pop() {
+                self.run_task(&mut task);
+                found_work = true;
+            }
+
+            // Try to steal work if no local work
+            if !found_work {
+                found_work = self.steal_work();
+            }
+
+            // In no_std environments, we can't sleep/yield, so we just continue
+            // This may result in higher CPU usage but maintains compatibility
+        }
+    }
     
     /// Executes a single task
     ///
@@ -103,15 +140,23 @@ impl WorkerThread {
         let waker = create_task_waker(task.id, self.global_queue.clone());
         let mut cx = Context::from_waker(&waker);
         
+        #[cfg(feature = "std")]
+        use std::task::Poll;
+        #[cfg(not(feature = "std"))]
+        use core::task::Poll;
+
         match task.poll(&mut cx) {
-            std::task::Poll::Ready(()) => {
+            Poll::Ready(()) => {
                 // Task completed successfully, increment the counter
                 self.tasks_processed.fetch_add(1, Ordering::Relaxed);
             }
-            std::task::Poll::Pending => {
+            Poll::Pending => {
                 // Re-queue the task for later execution without unsafe operations
                 // Take ownership of the task to avoid memory issues
+                #[cfg(feature = "std")]
                 let owned_task = std::mem::take(task);
+                #[cfg(not(feature = "std"))]
+                let owned_task = core::mem::take(task);
                 self.global_queue.push(owned_task);
             }
         }
