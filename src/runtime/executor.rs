@@ -52,7 +52,7 @@ struct ExecutorInner {
     tasks_processed: Arc<AtomicUsize>,
 
     /// All worker stealers for work distribution
-    all_stealers: Arc<Vec<crossbeam_deque::Stealer<Task>>>,
+    _all_stealers: Arc<Vec<crossbeam_deque::Stealer<Task>>>,
 }
 
 /// Inner state of the executor shared between instances (no_std version)

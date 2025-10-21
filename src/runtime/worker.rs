@@ -12,7 +12,7 @@ use core::{sync::atomic::{AtomicBool, AtomicUsize, Ordering}, task::Context};
 #[cfg(not(feature = "std"))]
 use alloc::{sync::Arc, vec::Vec};
 
-use crossbeam_deque::{Injector, Stealer, Worker, Steal};
+use crossbeam_deque::{Injector, Stealer, Worker};
 
 use super::task::Task;
 use super::waker::create_task_waker;

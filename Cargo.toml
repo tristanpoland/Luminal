@@ -1,6 +1,6 @@
 [package]
 name = "luminal_rt"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 authors = ["Luminal Team"]
 description = "A DLL-boundary safe async runtime with tokio-compatible API"
