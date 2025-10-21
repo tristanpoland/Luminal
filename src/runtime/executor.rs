@@ -123,7 +123,7 @@ impl ExecutorInner {
             shutdown,
             next_task_id: AtomicU64::new(1),
             tasks_processed,
-            all_stealers,
+            _all_stealers,
         }
     }
     
