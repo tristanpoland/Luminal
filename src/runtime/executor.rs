@@ -51,8 +51,8 @@ struct ExecutorInner {
     /// Counter for the number of tasks processed
     tasks_processed: Arc<AtomicUsize>,
 
-    /// All worker stealers for work distribution
-    _all_stealers: Arc<Vec<crossbeam_deque::Stealer<Task>>>,
+    // // All worker stealers for work distribution
+    // all_stealers: Arc<Vec<crossbeam_deque::Stealer<Task>>>,
 }
 
 /// Inner state of the executor shared between instances (no_std version)
@@ -115,7 +115,7 @@ impl ExecutorInner {
             worker_handles.push(handle);
         }
         
-        let all_stealers = Arc::new(stealers);
+        // let all_stealers = Arc::new(stealers);
         
         ExecutorInner {
             global_queue,
@@ -123,7 +123,7 @@ impl ExecutorInner {
             shutdown,
             next_task_id: AtomicU64::new(1),
             tasks_processed,
-            _all_stealers,
+            // all_stealers,
         }
     }
     
