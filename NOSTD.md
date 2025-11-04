@@ -20,7 +20,7 @@ Add Luminal to your `Cargo.toml` with `default-features = false`:
 
 ```toml
 [dependencies]
-luminal = { version = "0.3.0", default-features = false }
+luminal_rt = { version= "0.4.1", default-features = false }
 ```
 
 ## Requirements
